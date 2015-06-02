@@ -94,6 +94,9 @@ class Calendar {
 			case 'week' :
 				$this->buildBodyWeek();
 				break;
+			case 'turno':
+				$this->buildBodyTurno();
+				break;
 			default :
 				$this->buildBody();
 				break;
@@ -236,6 +239,12 @@ class Calendar {
 		if ($this->view == 'day') {
 			$day = $this->day;
 			$cnt = 0;
+		}
+		if ($this->view == 'turno') {
+			$sunday = strtotime('last sunday', strtotime($time . ' +1day'));
+			$day = date('j', $sunday);
+			$startingDay = date('N', $sunday);
+			$cnt = 6;
 		}
 
 		$this->week_days = array();
@@ -397,6 +406,151 @@ class Calendar {
 		$h .= "</table>";
 
 		$this->html .= $h;
+	}
+
+	private function buildBodyTurno() {
+		$day = $this->day;
+		$now_date = $this->year . '-' . $this->month . '-' . $this->day;
+		$startingDay = date('N', mktime(0, 0, 0, $this->month, $this->day, $this->year));
+		//$startingDay = date('N', strtotime('first day of this month', strtotime($now_date)));
+		//$startingDay = date('N', strtotime('today', strtotime($now_date)));
+		//$startingDay = date('N', mktime(0, 0, 0, 6, 9, 2015));
+        if ($this->startWeek == "L") {
+			$startingDay = $startingDay - 1;
+		}
+
+		$monthLength = $this->days_month[$this->month - 1];
+		$h = "<tr>";
+		$log1 = "";
+		for ($i = $startingDay == 7 ? 1 : 0; $i < 9; $i++) {
+			$ended = FALSE;
+			for ($j = 0; $j <= 6; $j++) {
+				$curr_date = $this->getDayDate($day);
+				//$log1 .= '----' . $curr_date. '-----<br/>';
+				$is_today = "";
+				if ($curr_date == $this->today)
+					$is_today = "class='today'";
+				if ($ended) {
+					$h .= "<td>";
+				} else {
+					$h .= "<td data-datetime='$curr_date' $is_today>";
+				}
+
+				$h .= $this->dateWrap[0];
+
+				if ($day <= $monthLength && ($day - $this->day <= 6) && ($i > 0 || $j >= $startingDay)) {
+					$h .= $this->dayWrap[0];
+					$h .= $day;
+					$h .= $this->dayWrap[1];
+					$h .= $this->buildEvents($curr_date);
+					$day++;
+				} elseif ($day == $monthLength && !$ended) {
+					$h .= $day;
+					$ended = TRUE;
+				} else {
+					$h .= "&nbsp;";
+				}
+
+				$h .= $this->dateWrap[1];
+				$h .= "</td>";
+
+			}
+			// stop making rows if we've run out of days
+			if ($day > $monthLength || $day - $this->day > 6) {
+				break;
+			} else {
+				$h .= "</tr>";
+				$h .= "<tr>";
+			}
+		}
+		$h .= "</tr>";
+		$h .= "</tbody>";
+		$h .= "</table>";
+		$this->html .= $h . $log1;
+	}
+
+	private function buildBodyTurno2() {
+
+		$events = $this->events;
+		$hasEvent = FALSE;
+
+		$turnos = array('Mañana 1', 'Mañana 2', 'Tarde 1', 'Tarde 2');
+
+		$h = "";
+		$log1 = "";
+		foreach($turnos as $turno) {
+			$h .= "<tr>";
+			$h .= "<td class='$this->timeClass'>$turno</td>";
+
+			for ($k = 0; $k < count($this->week_days); $k++) {
+				$log1 .= '----' . $k. '-----<br/>';
+				$wd = $this->week_days[$k];
+				$dt = date('Y-m-d', mktime(0, 0, 0, $this->month, $k, $this->year));
+				$h .= "<td data-datetime='$dt'>";
+				$h .= $this->dateWrap[0];
+
+				$hasEvent = FALSE;
+
+				// $key = '2015-06-06'
+				// $event = $events['2015-06-06']
+
+				foreach ($events as $key=>$event) {
+					//EVENT TIME AND DATE
+					$time_e = strtotime($key);
+					$hasEvent = TRUE;
+					$h .= $this->buildEvents(FALSE, $event);
+					$log1 .= $dt . ') key:' . $key . " => event:" . print_r($event, TRUE) . '<br/>';
+				}
+				$h .= !$hasEvent ? '&nbsp;' : '';
+				$h .= $this->dateWrap[1];
+				$h .= "</td>";
+			}
+
+			$h .= "</tr>";
+		}
+
+
+		//$h .= $this->buildEvents(FALSE, $event);
+		/*
+		for ($i = $this->start_hour; $i < $this->end_hour; $i++) {
+			for ($t = 0; $t < 2; $t++) {
+				$h .= "<tr>";
+				$min = $t == 0 ? ":00" : ":30";
+				$h .= "<td class='$this->timeClass'>" . date('g:ia', strtotime($i . $min)) . "</td>";
+
+				for ($k = 0; $k < count($this->week_days); $k++) {
+
+					$wd = $this->week_days[$k];
+					$time_r = $this->year . '-' . $this->month . '-' . $wd . ' ' . $i . ':00:00';
+					$min = $t == 0 ? '' : '+30 minute';
+					$time_1 = strtotime($time_r . $min);
+					$time_2 = strtotime(date('Y-m-d H:i:s', $time_1) . '+30 minute');
+					$dt = date('Y-m-d H:i:s', $time_1);
+					$h .= "<td data-datetime='$dt'>";
+					$h .= $this->dateWrap[0];
+
+					$hasEvent = FALSE;
+					foreach ($events as $key=>$event) {
+						//EVENT TIME AND DATE
+						$time_e = strtotime($key);
+						if ($time_e >= $time_1 && $time_e < $time_2) {
+							$hasEvent = TRUE;
+							$h .= $this->buildEvents(FALSE, $event);
+						}
+					}
+					$h .= !$hasEvent ? '&nbsp;' : '';
+					$h .= $this->dateWrap[1];
+					$h .= "</td>";
+				}
+				$h .= "</tr>";
+			}
+		}
+		*/
+
+		$h .= "</tbody>";
+		$h .= "</table>";
+
+		$this->html .= $h . $log1;
 	}
 
 	private function buildEvents($date, $event = FALSE) {
